@@ -1,3 +1,9 @@
+.DS_Store
+cache/
+mapboxkey.py
+outputs/
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -20,7 +26,6 @@ parts/
 sdist/
 var/
 wheels/
-pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
@@ -137,10 +142,3 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
-demo.html
-<<<<<<< HEAD
-.DS_Store
-=======
-DS_Store
->>>>>>> c873097f6c8d87892620044af1c29a360a1b995f
-cache
