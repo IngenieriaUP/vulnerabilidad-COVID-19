@@ -10,10 +10,9 @@ Los mapas deben estar basados en datos abiertos y replicables a otras ciudados, 
 ### Fuentes de datos
 
 - **OpenStreetMap**
-- **Censo Nacional 2007**
-- **LandScan 2017**
-- **TOP 10mil**
-- **Dime**
+- **Censo Nacional 2007 INEI**
+- **Censo de Mercados 2016 INEI**
+- **Humanitarian Data Exchange**
 
 
 *Esta repo está basada en [el trabajo de Patricio y Tony para la ciudad de Quito](https://vulnerabilidad-codigo.netlify.com/)
