@@ -1,21 +1,13 @@
 import geopandas as gpd
-import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 import shapely
 import json
 import pandas as pd
-import plotly.graph_objects as go
-import pydeck as pdk
 import requests
 from h3 import h3
 from scipy.spatial import cKDTree
 from tqdm import tqdm
 
-
-# - Descargar datos de cualquier ciudad (límites, ubicación de puntos de servicio en distintas categorías como hospitales o bancos) en base a OSM
-# - Descargar datos demográficos actualizados de la ciudad desde HDX
-# - Particionar la superficie de la ciudad en celdas regulares
 # - Generar métricas de acceso
 # - Generar mapas y visualizaciones con los resultados
 
@@ -301,7 +293,7 @@ class BIDDataDownloader:
 
             return node_gdf, way_gdf
 
-    def shell_from_geometry(geometry):
+    def shell_from_geometry(self, geometry):
         '''
         Util function for park and pitch processing.
         '''
@@ -311,4 +303,75 @@ class BIDDataDownloader:
             shell.append([record['lon'], record['lat']])
         return shell
 
-    
+    def gen_h3_hexagons(self, resolution, city):
+        '''
+        Converts an input multipolygon layer to H3 hexagons given a resolution.
+
+        Parameters
+        ----------
+
+        resolution: int
+                    Hexagon resolution, higher values create bigger hexagons.
+
+        city: GeoDataFrame
+              Input city polygons to transform into hexagons.
+
+        Returns
+        -------
+
+        city_hexagons: GeoDataFrame
+                       Hexagon geometry GeoDataFrame (hex_id, geom).
+
+        city_centroids: GeoDataFrame
+                        Hexagon centroids for the specified city (hex_id, geom).
+
+        Example
+        -------
+
+        >> lima = filter_population(pop_lima, poly_lima)
+        >> lima_hex = gen_h3_hexagons(8, lima)
+
+        	0	            | geometry
+	        888e620e41fffff | POLYGON ((-76.80007 -12.46917, -76.80439 -12.4...
+	        888e62c809fffff | POLYGON ((-77.22539 -12.08663, -77.22971 -12.0...
+	        888e62c851fffff | POLYGON ((-77.20708 -12.08484, -77.21140 -12.0...
+	        888e62c841fffff | POLYGON ((-77.22689 -12.07104, -77.23122 -12.0...
+	        888e62c847fffff | POLYGON ((-77.23072 -12.07929, -77.23504 -12.0...
+
+            0	            | geometry
+            888e620e41fffff | POINT (-76.79956 -12.47436)
+            888e62c809fffff | POINT (-77.22488 -12.09183)
+            888e62c851fffff | POINT (-77.20658 -12.09004)
+            888e62c841fffff | POINT (-77.22639 -12.07624)
+            888e62c847fffff | POINT (-77.23021 -12.08448)
+
+        '''
+
+        # Polyfill the city boundaries
+        h3_centroids = list()
+        h3_polygons = list()
+        h3_indexes = list()
+
+        # Get every polygon in Multipolygon shape
+        city_poly = city.explode().reset_index(drop=True)
+
+        for ix, geo in city_poly.iterrows():
+            hexagons = h3.polyfill(geo[0].__geo_interface__, res=resolution, \
+                                    geo_json_conformant=True)
+            for hexagon in hexagons:
+                centroid_lat, centroid_lon = h3.h3_to_geo(hexagon) # format as x,y (lon, lat)
+                h3_centroids.append(shapely.geometry.Point(centroid_lon, centroid_lat))
+
+                h3_geo_boundary = h3.h3_to_geo_boundary(hexagon)
+                [bound.reverse() for bound in h3_geo_boundary] # format as x,y (lon, lat)
+                h3_polygons.append(shapely.geometry.Polygon(h3_geo_boundary))
+
+                h3_indexes.append(hexagon)
+
+        # Create hexagon dataframe
+        city_hexagons = gpd.GeoDataFrame(h3_indexes, geometry=h3_polygons).drop_duplicates()
+        city_hexagons.crs = 'EPSG:4326'
+        city_centroids = gpd.GeoDataFrame(h3_indexes, geometry=h3_centroids).drop_duplicates()
+        city_centroids.crs = 'EPSG:4326'
+
+        return city_hexagons, city_centroids
