@@ -12,7 +12,7 @@ from tqdm import tqdm
 # - Generar mapas y visualizaciones con los resultados
 
 class BIDDataDownloader:
-    def __init__():
+    def __init__(self):
         self.hdx_url = 'https://data.humdata.org/dataset/{}'
         self.overpass_url = "http://overpass-api.de/api/interpreter"
         self.osm_url = 'https://nominatim.openstreetmap.org/search.php'
@@ -51,9 +51,9 @@ class BIDDataDownloader:
 
 
         '''
-        parameters['q'] = query
+        self.osm_parameters['q'] = query
 
-        response = requests.get(self.url, params=self.parameters)
+        response = requests.get(self.osm_url, params=self.osm_parameters)
         all_results = response.json()
         gdf = gpd.GeoDataFrame.from_features(all_results['features'])
         city = gdf.iloc[expected_position:expected_position+1, :]
@@ -199,7 +199,7 @@ class BIDDataDownloader:
         >> print(lima.shape, removed.shape)
         (348434, 4) (348427, 4)
         '''
-
+        miny, maxy, minx, maxx = bounds
         filter = gdf['latitude'].between(miny,maxy) & gdf['longitude'].between(minx,maxx)
         drop_ix = gdf[filter].index
 
@@ -303,15 +303,15 @@ class BIDDataDownloader:
             shell.append([record['lon'], record['lat']])
         return shell
 
-    def gen_h3_hexagons(self, resolution, city):
+    def gen_hexagons(self, resolution, city):
         '''
         Converts an input multipolygon layer to H3 hexagons given a resolution.
 
         Parameters
         ----------
 
-        resolution: int
-                    Hexagon resolution, higher values create bigger hexagons.
+        resolution: int, 0:15
+                    Hexagon resolution, higher values create smaller hexagons.
 
         city: GeoDataFrame
               Input city polygons to transform into hexagons.
@@ -329,7 +329,7 @@ class BIDDataDownloader:
         -------
 
         >> lima = filter_population(pop_lima, poly_lima)
-        >> lima_hex = gen_h3_hexagons(8, lima)
+        >> lima_hex = gen_hexagons(8, lima)
 
         	0	            | geometry
 	        888e620e41fffff | POLYGON ((-76.80007 -12.46917, -76.80439 -12.4...
@@ -356,7 +356,7 @@ class BIDDataDownloader:
         city_poly = city.explode().reset_index(drop=True)
 
         for ix, geo in city_poly.iterrows():
-            hexagons = h3.polyfill(geo[0].__geo_interface__, res=resolution, \
+            hexagons = h3.polyfill(geo['geometry'].__geo_interface__, res=resolution, \
                                     geo_json_conformant=True)
             for hexagon in hexagons:
                 centroid_lat, centroid_lon = h3.h3_to_geo(hexagon) # format as x,y (lon, lat)
@@ -375,3 +375,60 @@ class BIDDataDownloader:
         city_centroids.crs = 'EPSG:4326'
 
         return city_hexagons, city_centroids
+
+    def merge_point_hex(self, hex, points, how, op, agg):
+        '''
+        Merges a H3 hexagon GeoDataFrame with a Point GeoDataFrame and aggregates the
+        point gdf data.
+
+        Parameters
+        ----------
+        hex: GeoDataFrame
+             Input GeoDataFrame containing hexagon geometries
+
+        points: GeoDataFrame
+                Input GeoDataFrame containing points and features to be aggregated
+
+        how: str. One of {'inner', 'left', 'right'}. Determines how to merge data.
+             'left' uses keys from left and only retains geometry from left
+             'right' uses keys from right and only retains geometry from right
+             'inner': use intersection of keys from both dfs; retain only left geometry column
+
+        op: str. One of {'intersects', 'contains', 'within'}. Determines how
+                 geometries are queried for merging.
+
+        agg: dict. A dictionary with column names as keys and values as aggregation
+             operations. The aggregation must be one of {'sum', 'min', 'max'}.
+
+        Returns
+        -------
+
+        hex: GeoDataFrame
+                   Result of a spatial join within hex and points. All features are aggregated
+                   based on the input parameters
+
+        Example
+        -------
+
+        >> lima = download_osm(2, 'Lima, Peru')
+        >> pop_lima = download_hdx(...)
+        >> pop_df = filter_population(pop_lima, lima)
+        >> hex = gen_hexagons()
+        >> merge_point_hex()
+
+        '''
+        joined = gpd.sjoin(points, hex, how=how, op=op)
+
+        #Uses index right based on the order of points and hex. Right takes hex index
+        hex_merge = joined.groupby('index_right').agg(agg)
+
+        #Avoid SpecificationError by copying the DataFrame
+        ret_hex = hex.copy()
+
+        for key in agg.keys():
+            ret_hex.loc[hex_merge.index, key] = hex_merge[key].values
+
+        return ret_hex
+
+
+    def merge_poly_hex():pass
