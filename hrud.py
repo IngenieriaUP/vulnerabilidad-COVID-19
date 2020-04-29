@@ -11,7 +11,7 @@ from tqdm import tqdm
 # - Generar métricas de acceso
 # - Generar mapas y visualizaciones con los resultados
 
-class BIDDataDownloader:
+class HRUD(object):
     def __init__(self):
         self.hdx_url = 'https://data.humdata.org/dataset/{}'
         self.overpass_url = "http://overpass-api.de/api/interpreter"
@@ -376,7 +376,7 @@ class BIDDataDownloader:
 
         return city_hexagons, city_centroids
 
-    def merge_point_hex(self, hex, points, how, op, agg):
+    def merge_shape_hex(self, hex, shape, how, op, agg):
         '''
         Merges a H3 hexagon GeoDataFrame with a Point GeoDataFrame and aggregates the
         point gdf data.
@@ -386,7 +386,7 @@ class BIDDataDownloader:
         hex: GeoDataFrame
              Input GeoDataFrame containing hexagon geometries
 
-        points: GeoDataFrame
+        shape: GeoDataFrame
                 Input GeoDataFrame containing points and features to be aggregated
 
         how: str. One of {'inner', 'left', 'right'}. Determines how to merge data.
@@ -413,11 +413,17 @@ class BIDDataDownloader:
         >> lima = download_osm(2, 'Lima, Peru')
         >> pop_lima = download_hdx(...)
         >> pop_df = filter_population(pop_lima, lima)
-        >> hex = gen_hexagons()
-        >> merge_point_hex()
+        >> hex = gen_hexagons(8, lima)
+        >> merge_point_hex(hex, pop_df, 'inner', 'within', {'population_2020':'sum'})
 
+        0               | geometry                                          | population_2020
+        888e628d8bfffff | POLYGON ((-76.66002 -12.20371, -76.66433 -12.2... | NaN
+        888e62c5ddfffff | POLYGON ((-76.94564 -12.16138, -76.94996 -12.1... | 14528.039097
+        888e62132bfffff | POLYGON ((-76.84736 -12.17523, -76.85167 -12.1... | 608.312696
+        888e628debfffff | POLYGON ((-76.67982 -12.18998, -76.68413 -12.1... | NaN
+        888e6299b3fffff | POLYGON ((-76.78876 -11.97286, -76.79307 -11.9... | 3225.658803
         '''
-        joined = gpd.sjoin(points, hex, how=how, op=op)
+        joined = gpd.sjoin(shape, hex, how=how, op=op)
 
         #Uses index right based on the order of points and hex. Right takes hex index
         hex_merge = joined.groupby('index_right').agg(agg)
@@ -429,6 +435,3 @@ class BIDDataDownloader:
             ret_hex.loc[hex_merge.index, key] = hex_merge[key].values
 
         return ret_hex
-
-
-    def merge_poly_hex():pass
